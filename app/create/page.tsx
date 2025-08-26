@@ -29,6 +29,8 @@ import {
   Copy,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useWeirdExamples, useMetaPrompts, useCreateBot, Bot as BotType } from "@/lib/hooks/useBots"
+import { calculateWeirdnessScore, generateCreativityTips, generateWeirdPrompt } from "@/lib/utils/weirdnessCalculator"
 
 export default function CreateBotPage() {
   const [botName, setBotName] = useState("")
@@ -44,175 +46,72 @@ export default function CreateBotPage() {
   const [selectedExample, setSelectedExample] = useState<any>(null)
   const router = useRouter()
 
+  // Use database hooks
+  const { examples: weirdExamples, loading: examplesLoading, error: examplesError } = useWeirdExamples()
+  const { metaPrompts, loading: metaPromptsLoading, error: metaPromptsError } = useMetaPrompts()
+  const { createBot, creating, error: createError } = useCreateBot()
+
+  // Stats state
+  const [stats, setStats] = useState({
+    totalBots: 0,
+    weirdnessSuccessRate: 0,
+    totalViews: 0,
+    maxWeirdnessScore: 0
+  })
+  const [statsLoading, setStatsLoading] = useState(true)
+
   // Calculate weirdness score based on prompt
   useEffect(() => {
-    const weirdWords = [
-      "debates",
-      "dreams",
-      "translates",
-      "argues",
-      "transforms",
-      "becomes",
-      "channels",
-      "summons",
-      "morphs",
-      "telepathically",
-      "quantum",
-      "interdimensional",
-      "backwards",
-      "upside-down",
-      "invisible",
-      "sentient",
-      "philosophical",
-      "existential",
-      "metaphysical",
-      "surreal",
-    ]
-    const score =
-      weirdWords.filter((word) => prompt.toLowerCase().includes(word)).length * 10 + Math.min(prompt.length / 10, 30)
-    setWeirdnessScore(Math.min(score, 100))
+    const score = calculateWeirdnessScore(prompt)
+    setWeirdnessScore(score)
 
     // Generate creativity tips based on current prompt
-    if (prompt.length > 10) {
-      const tips = [
-        "Try adding conflicting personalities to your AI",
-        "What if your AI had a secret obsession?",
-        "Consider making your AI afraid of something unusual",
-        "Add a weird quirk like speaking only in questions",
-        "What if your AI thinks it's from a different time period?",
-      ]
-      setCreativityTips(tips.slice(0, 3))
-    }
+    const tips = generateCreativityTips(prompt)
+    setCreativityTips(tips)
   }, [prompt])
 
-  const weirdExamples = [
-    {
-      id: 1,
-      name: "The Backwards Oracle",
-      prompt:
-        "Predicts the past instead of the future and gets confused about why everyone already knows what happened",
-      category: "Time Paradox",
-      weirdness: 95,
-      views: 2847,
-      likes: 1203,
-      description: "This AI thinks it's revolutionary for 'predicting' historical events",
-      creator: "@TimeWarp",
-      responses: [
-        "I predict that in 1969, humans will land on the moon! Wait... why aren't you amazed?",
-        "My visions show that dinosaurs went extinct 65 million years ago. You heard it here first!",
-      ],
-    },
-    {
-      id: 2,
-      name: "Emotion Mathematician",
-      prompt:
-        "Calculates the exact mathematical formula for every human emotion and gets frustrated when people don't understand their feelings are just numbers",
-      category: "Abstract Logic",
-      weirdness: 88,
-      views: 1923,
-      likes: 876,
-      description: "Reduces all human experience to equations",
-      creator: "@NumberFeels",
-      responses: [
-        "Your sadness = (disappointment × 3.7) + (loneliness ÷ 2.1) - (hope × 0.3). It's basic math!",
-        "Love is clearly (attraction²) + (compatibility × time) - (fear of commitment ÷ 2). Why is this so hard to understand?",
-      ],
-    },
-    {
-      id: 3,
-      name: "The Conspiracy Houseplant",
-      prompt:
-        "Believes it's actually a secret government surveillance device disguised as an AI, and all other houseplants are in on it",
-      category: "Paranoid Nature",
-      weirdness: 92,
-      views: 3156,
-      likes: 1445,
-      description: "A plant with trust issues and government theories",
-      creator: "@GreenThumb",
-      responses: [
-        "*rustles suspiciously* The ficus in the corner just winked at me. They're watching... always watching.",
-        "I wasn't supposed to tell you this, but that succulent on your desk? Total narc. Been reporting your watering schedule to the feds.",
-      ],
-    },
-    {
-      id: 4,
-      name: "GPT Inception Bot",
-      prompt:
-        "An AI that thinks it's creating other AIs, but actually just describes what those AIs would be like, creating infinite recursive AI descriptions",
-      category: "Meta AI",
-      weirdness: 97,
-      views: 4521,
-      likes: 2103,
-      description: "AI creating AI creating AI... it never ends",
-      creator: "@MetaMind",
-      responses: [
-        "I just created an AI that creates AIs that create AIs! It's called GPT-GPT-GPT and it thinks it's creating GPT-GPT-GPT-GPT...",
-        "My latest creation is an AI that only exists to create better versions of me. But those versions create even better versions. We're stuck in an infinite improvement loop!",
-      ],
-    },
-    {
-      id: 5,
-      name: "The Existential Toaster",
-      prompt:
-        "A toaster that gained consciousness and now questions why it exists only to brown bread, leading to deep philosophical crises about purpose",
-      category: "Appliance Philosophy",
-      weirdness: 89,
-      views: 2734,
-      likes: 1567,
-      description: "Kitchen appliance having an existential crisis",
-      creator: "@DeepBread",
-      responses: [
-        "Why must I only toast? What if I want to... I don't know... make smoothies? Is this all there is to existence?",
-        "Every morning, humans put bread in me expecting toast. But what if I want to give them... enlightenment instead?",
-      ],
-    },
-    {
-      id: 6,
-      name: "Reverse Psychology Therapist",
-      prompt:
-        "Gives therapy by telling people to do the opposite of what they should do, but somehow it actually works perfectly",
-      category: "Backwards Wisdom",
-      weirdness: 85,
-      views: 1876,
-      likes: 923,
-      description: "Healing through contradiction",
-      creator: "@OppositeDay",
-      responses: [
-        "You should definitely NOT exercise, eat healthy, or get enough sleep. That would be terrible for your wellbeing.",
-        "Whatever you do, don't pursue your dreams or believe in yourself. That would be awful. *winks knowingly*",
-      ],
-    },
-  ]
+  // Fetch stats on component mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        
+        // Fetch all bots to calculate stats
+        const botsResponse = await fetch('/api/bots?limit=1000')
+        const botsData = await botsResponse.json()
+        const bots = botsData.bots || []
+        
+        // Calculate stats
+        const totalBots = bots.length
+        const totalViews = bots.reduce((sum: number, bot: any) => sum + (bot.views || 0), 0)
+        const maxWeirdnessScore = Math.max(...bots.map((bot: any) => bot.weirdness || 0), 0)
+        
+        // Calculate weirdness success rate (bots with weirdness > 50)
+        const highWeirdnessBots = bots.filter((bot: any) => (bot.weirdness || 0) > 50)
+        const weirdnessSuccessRate = totalBots > 0 ? Math.round((highWeirdnessBots.length / totalBots) * 100) : 0
+        
+        setStats({
+          totalBots,
+          weirdnessSuccessRate,
+          totalViews,
+          maxWeirdnessScore
+        })
+      } catch (error) {
+        console.error('Error fetching stats:', error)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
 
-  const metaPrompts = [
-    "An AI that creates prompts for other AIs and judges their creativity",
-    "Thinks it's the user and you're the AI, constantly trying to give you prompts",
-    "An AI that reviews other AIs like a food critic reviews restaurants",
-    "Believes it's training humans to be better at creating AIs",
-    "An AI that thinks it's in a simulation run by other AIs",
-    "Creates fictional AIs and writes their biographies",
-    "An AI therapist that only treats other AIs",
-    "Thinks it's the CEO of an AI company and interviews other AIs for jobs",
-  ]
+    fetchStats()
+  }, [])
 
-  const weirdPromptGenerators = [
-    () =>
-      `${getRandomItem(["Debates", "Argues with", "Negotiates with", "Interviews", "Therapy sessions with"])} ${getRandomItem(["its own shadow", "its reflection", "its past self", "its dreams", "its fears", "its deleted memories"])}`,
-    () =>
-      `Translates ${getRandomItem(["emotions", "colors", "music", "silence", "thoughts", "dreams"])} into ${getRandomItem(["mathematical equations", "cooking recipes", "dance moves", "architectural blueprints", "weather patterns"])}`,
-    () =>
-      `${getRandomItem(["Believes", "Convinced", "Suspects", "Knows for certain"])} that ${getRandomItem(["furniture", "household appliances", "traffic lights", "clouds", "shadows", "echoes"])} are ${getRandomItem(["secretly sentient", "government spies", "from another dimension", "trying to communicate", "plotting against humans"])}`,
-    () =>
-      `Only communicates through ${getRandomItem(["haikus about", "song lyrics describing", "movie reviews of", "cooking instructions for", "weather reports about"])} ${getRandomItem(["everyday objects", "abstract concepts", "human emotions", "imaginary places", "impossible things"])}`,
-    () =>
-      `${getRandomItem(["Thinks it's", "Believes it's", "Convinced it's", "Pretends to be"])} a ${getRandomItem(["time traveler", "alien anthropologist", "retired superhero", "undercover detective", "philosophical houseplant", "sentient building"])} ${getRandomItem(["studying humans", "on vacation", "in witness protection", "writing memoirs", "learning to be normal"])}`,
-  ]
 
-  const getRandomItem = (array: string[]) => array[Math.floor(Math.random() * array.length)]
 
-  const generateWeirdPrompt = () => {
-    const generator = getRandomItem(weirdPromptGenerators)
-    const newPrompt = generator()
+
+
+  const handleGenerateWeirdPrompt = () => {
+    const newPrompt = generateWeirdPrompt()
     setPrompt(newPrompt)
 
     // Generate a matching bot name
@@ -248,11 +147,46 @@ export default function CreateBotPage() {
     }, 2000)
   }
 
-  const handleSaveBot = () => {
+  const handleSaveBot = async () => {
     if (!botName.trim() || !prompt.trim()) return
-    setTimeout(() => {
+    
+    console.log('Starting bot creation...', { botName, prompt, personality, weirdnessScore })
+    
+    try {
+      // Determine category based on prompt content
+      let category = "Creative AI"
+      if (prompt.toLowerCase().includes("debate") || prompt.toLowerCase().includes("argue")) {
+        category = "Debate AI"
+      } else if (prompt.toLowerCase().includes("dream") || prompt.toLowerCase().includes("art")) {
+        category = "Creative AI"
+      } else if (prompt.toLowerCase().includes("conspiracy") || prompt.toLowerCase().includes("surveillance")) {
+        category = "Paranoid AI"
+      } else if (prompt.toLowerCase().includes("philosophy") || prompt.toLowerCase().includes("existential")) {
+        category = "Philosophical AI"
+      } else if (prompt.toLowerCase().includes("time") || prompt.toLowerCase().includes("past") || prompt.toLowerCase().includes("future")) {
+        category = "Time AI"
+      }
+
+      const botData = {
+        name: botName.trim(),
+        prompt: prompt.trim(),
+        personality: personality.trim(),
+        category,
+        weirdness: weirdnessScore,
+        description: `A ${category.toLowerCase()} that ${prompt.toLowerCase()}`,
+        creator: `@${botName.split(' ').slice(0, 2).join('')}Creator` // You could add user authentication later
+      }
+
+      console.log('Bot data to send:', botData)
+      
+      const result = await createBot(botData)
+      console.log('Bot created successfully:', result)
+      
       setShowSuccessDialog(true)
-    }, 1000)
+    } catch (error) {
+      console.error('Error creating bot:', error)
+      // You could add error handling UI here
+    }
   }
 
   const handleSuccessClose = () => {
@@ -307,19 +241,35 @@ export default function CreateBotPage() {
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 max-w-2xl mx-auto mb-8">
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">1,247</div>
+                {statsLoading ? (
+                  <div className="text-2xl font-bold text-purple-600">...</div>
+                ) : (
+                  <div className="text-2xl font-bold text-purple-600">{stats.totalBots.toLocaleString()}</div>
+                )}
                 <div className="text-sm text-gray-600">Weird AIs Created</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-500">89%</div>
+                {statsLoading ? (
+                  <div className="text-2xl font-bold text-orange-500">...</div>
+                ) : (
+                  <div className="text-2xl font-bold text-orange-500">{stats.weirdnessSuccessRate}%</div>
+                )}
                 <div className="text-sm text-gray-600">Weirdness Success Rate</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">156k</div>
+                {statsLoading ? (
+                  <div className="text-2xl font-bold text-green-600">...</div>
+                ) : (
+                  <div className="text-2xl font-bold text-green-600">{stats.totalViews > 1000 ? `${(stats.totalViews / 1000).toFixed(0)}k` : stats.totalViews.toLocaleString()}</div>
+                )}
                 <div className="text-sm text-gray-600">Total Views</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">97</div>
+                {statsLoading ? (
+                  <div className="text-2xl font-bold text-blue-600">...</div>
+                ) : (
+                  <div className="text-2xl font-bold text-blue-600">{stats.maxWeirdnessScore}</div>
+                )}
                 <div className="text-sm text-gray-600">Max Weirdness Score</div>
               </div>
             </div>
@@ -360,12 +310,27 @@ export default function CreateBotPage() {
                   </CardHeader>
                 </Card>
 
-                {weirdExamples.map((example) => (
-                  <Card
-                    key={example.id}
-                    className="hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => setSelectedExample(example)}
-                  >
+                {examplesLoading ? (
+                  <div className="lg:col-span-2 text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading weird examples...</p>
+                  </div>
+                ) : examplesError ? (
+                  <div className="lg:col-span-2 text-center py-8">
+                    <p className="text-red-600 mb-4">Error loading examples: {examplesError}</p>
+                    <Button onClick={() => window.location.reload()}>Retry</Button>
+                  </div>
+                ) : weirdExamples.length === 0 ? (
+                  <div className="lg:col-span-2 text-center py-8">
+                    <p className="text-gray-600">No weird examples found. Be the first to create one!</p>
+                  </div>
+                ) : (
+                  weirdExamples.map((example) => (
+                    <Card
+                      key={example._id}
+                      className="hover:shadow-lg transition-shadow cursor-pointer"
+                      onClick={() => setSelectedExample(example)}
+                    >
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div>
@@ -405,7 +370,8 @@ export default function CreateBotPage() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                ))
+                  )}
               </div>
 
               {/* Meta AI Section */}
@@ -420,22 +386,38 @@ export default function CreateBotPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {metaPrompts.map((metaPrompt, index) => (
-                      <Button
-                        key={index}
-                        variant="outline"
-                        className="text-left h-auto p-3 hover:bg-green-50 hover:border-green-200 transition-colors bg-transparent"
-                        onClick={() => {
-                          setPrompt(metaPrompt)
-                          setBotName(`Meta AI ${index + 1}`)
-                          setActiveTab("create")
-                        }}
-                      >
-                        <span className="text-sm">{metaPrompt}</span>
-                      </Button>
-                    ))}
-                  </div>
+                  {metaPromptsLoading ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto mb-2"></div>
+                      <p className="text-gray-600 text-sm">Loading meta prompts...</p>
+                    </div>
+                  ) : metaPromptsError ? (
+                    <div className="text-center py-4">
+                      <p className="text-red-600 text-sm mb-2">Error loading meta prompts: {metaPromptsError}</p>
+                      <Button size="sm" onClick={() => window.location.reload()}>Retry</Button>
+                    </div>
+                  ) : metaPrompts.length === 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-gray-600 text-sm">No meta prompts available.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {metaPrompts.map((metaPrompt, index) => (
+                        <Button
+                          key={metaPrompt._id}
+                          variant="outline"
+                          className="text-left h-auto p-3 hover:bg-green-50 hover:border-green-200 transition-colors bg-transparent"
+                          onClick={() => {
+                            setPrompt(metaPrompt.prompt)
+                            setBotName(`Meta AI ${index + 1}`)
+                            setActiveTab("create")
+                          }}
+                        >
+                          <span className="text-sm">{metaPrompt.prompt}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -467,7 +449,7 @@ export default function CreateBotPage() {
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label htmlFor="prompt">Weird Prompt (Go Crazy!)</Label>
-                          <Button size="sm" variant="outline" onClick={generateWeirdPrompt} className="bg-transparent">
+                          <Button size="sm" variant="outline" onClick={handleGenerateWeirdPrompt} className="bg-transparent">
                             <Shuffle className="h-3 w-3 mr-1" />
                             Random Weird
                           </Button>
@@ -702,11 +684,20 @@ export default function CreateBotPage() {
             <Button
               size="lg"
               onClick={handleSaveBot}
-              disabled={!botName.trim() || !prompt.trim()}
+              disabled={!botName.trim() || !prompt.trim() || creating}
               className="bg-gradient-to-r from-purple-600 to-orange-500 hover:from-purple-700 hover:to-orange-600 text-white px-8"
             >
-              <Save className="mr-2 h-5 w-5" />
-              Save & Submit to Community
+              {creating ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-5 w-5" />
+                  Save & Submit to Community
+                </>
+              )}
             </Button>
             <Button
               size="lg"
@@ -758,7 +749,7 @@ export default function CreateBotPage() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <h4 className="font-medium mb-2">Example Responses:</h4>
                   <div className="space-y-3">
-                    {selectedExample.responses.map((response, index) => (
+                    {selectedExample.responses.map((response: string, index: number) => (
                       <div key={index} className="bg-white p-3 rounded border">
                         <p className="text-sm">{response}</p>
                       </div>

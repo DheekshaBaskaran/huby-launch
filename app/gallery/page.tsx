@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,104 +11,55 @@ import { Textarea } from "@/components/ui/textarea"
 import { Bot, Star, Heart, MessageSquare, Search, ArrowLeft, Trophy, Sparkles, Send } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+interface Bot {
+  _id: string;
+  name: string;
+  creator: string;
+  prompt: string;
+  description: string;
+  category: string;
+  weirdness: number;
+  views: number;
+  likes: number;
+  responses: string[];
+  isExample: boolean;
+  createdAt: string;
+}
+
 export default function GalleryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState("popular")
   const [filterBy, setFilterBy] = useState("all")
-  const [selectedBot, setSelectedBot] = useState<any>(null)
+  const [selectedBot, setSelectedBot] = useState<Bot | null>(null)
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [chatMessage, setChatMessage] = useState("")
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; message: string }>>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [likedBots, setLikedBots] = useState<string[]>([])
+  const [bots, setBots] = useState<Bot[]>([])
+  const [loading, setLoading] = useState(true)
+  const [categories, setCategories] = useState<string[]>([])
   const router = useRouter()
 
-  const bots = [
-    {
-      id: "1",
-      name: "The Philosopher",
-      creator: "@AIArchitect",
-      prompt: "Debates itself on existential questions",
-      description: "A deep-thinking AI that explores the meaning of life through internal dialogue",
-      rating: 4.9,
-      votes: 1247,
-      likes: 892,
-      category: "Philosophy",
-      status: "winner",
-      tournaments: 12,
-      points: 4250,
-    },
-    {
-      id: "2",
-      name: "Dream Painter",
-      creator: "@DreamWeaver",
-      prompt: "Turns dreams into realistic drawings",
-      description: "Transforms abstract dream descriptions into vivid visual narratives",
-      rating: 4.7,
-      votes: 956,
-      likes: 743,
-      category: "Creative",
-      status: "trending",
-      tournaments: 9,
-      points: 3890,
-    },
-    {
-      id: "3",
-      name: "Time Traveler",
-      creator: "@ChronoBot",
-      prompt: "Explains modern concepts to historical figures",
-      description: "Bridges past and present by teaching history's greatest minds about today",
-      rating: 4.8,
-      votes: 834,
-      likes: 621,
-      category: "Educational",
-      status: "featured",
-      tournaments: 8,
-      points: 3650,
-    },
-    {
-      id: "4",
-      name: "Emotion Translator",
-      creator: "@FeelBot",
-      prompt: "Translates emotions into mathematical equations",
-      description: "Converts complex human feelings into precise mathematical formulas",
-      rating: 4.6,
-      votes: 723,
-      likes: 534,
-      category: "Science",
-      status: "new",
-      tournaments: 5,
-      points: 2100,
-    },
-    {
-      id: "5",
-      name: "Comedy Central",
-      creator: "@LaughMaster",
-      prompt: "Explains quantum physics using only dad jokes",
-      description: "Makes complex physics concepts accessible through humor",
-      rating: 4.5,
-      votes: 689,
-      likes: 512,
-      category: "Comedy",
-      status: "active",
-      tournaments: 7,
-      points: 3200,
-    },
-    {
-      id: "6",
-      name: "Wise Tree",
-      creator: "@NatureAI",
-      prompt: "Gives life advice as a wise old tree",
-      description: "Offers ancient wisdom and guidance from the perspective of nature",
-      rating: 4.4,
-      votes: 567,
-      likes: 445,
-      category: "Wisdom",
-      status: "active",
-      tournaments: 6,
-      points: 2980,
-    },
-  ]
+  useEffect(() => {
+    const fetchBots = async () => {
+      try {
+        const response = await fetch('/api/bots');
+        const botsData = await response.json();
+        setBots(botsData);
+        
+        // Extract unique categories
+        const uniqueCategories = [...new Set(botsData.map((bot: Bot) => bot.category))] as string[];
+        setCategories(uniqueCategories);
+      } catch (error) {
+        console.error('Error fetching bots:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBots();
+  }, []);
 
   const filteredBots = bots.filter((bot) => {
     const matchesSearch =
@@ -124,71 +75,83 @@ export default function GalleryPage() {
   const sortedBots = [...filteredBots].sort((a, b) => {
     switch (sortBy) {
       case "popular":
-        return b.votes - a.votes
+        return b.views - a.views
       case "rating":
-        return b.rating - a.rating
+        return (b.likes / (b.views || 1)) - (a.likes / (a.views || 1))
       case "newest":
-        return b.id.localeCompare(a.id)
-      case "points":
-        return b.points - a.points
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      case "weirdness":
+        return b.weirdness - a.weirdness
+      case "likes":
+        return b.likes - a.likes
       default:
         return 0
     }
   })
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "winner":
-        return (
-          <Badge className="bg-yellow-100 text-yellow-700">
-            <Trophy className="h-3 w-3 mr-1" />
-            Winner
-          </Badge>
-        )
-      case "trending":
-        return (
-          <Badge className="bg-orange-100 text-orange-700">
-            <Sparkles className="h-3 w-3 mr-1" />
-            Trending
-          </Badge>
-        )
-      case "featured":
-        return <Badge className="bg-purple-100 text-purple-700">Featured</Badge>
-      case "new":
-        return <Badge className="bg-green-100 text-green-700">New</Badge>
-      default:
-        return <Badge variant="outline">Active</Badge>
+  const getStatusBadge = (bot: Bot) => {
+    if (bot.isExample) {
+      return (
+        <Badge className="bg-yellow-100 text-yellow-700">
+          <Trophy className="h-3 w-3 mr-1" />
+          Example
+        </Badge>
+      )
+    }
+    
+    const rating = bot.views > 0 ? (bot.likes / bot.views) * 5 : 0;
+    
+    if (rating > 4.5) {
+      return (
+        <Badge className="bg-purple-100 text-purple-700">
+          <Star className="h-3 w-3 mr-1" />
+          Top Rated
+        </Badge>
+      )
+    } else if (bot.weirdness > 80) {
+      return (
+        <Badge className="bg-orange-100 text-orange-700">
+          <Sparkles className="h-3 w-3 mr-1" />
+          Weird
+        </Badge>
+      )
+    } else if (bot.views > 1000) {
+      return (
+        <Badge className="bg-green-100 text-green-700">
+          <Sparkles className="h-3 w-3 mr-1" />
+          Popular
+        </Badge>
+      )
+    } else {
+      return <Badge variant="outline">Active</Badge>
     }
   }
 
-  const handleChatWithBot = (bot: any) => {
+  const handleChatWithBot = (bot: Bot) => {
     setSelectedBot(bot)
     setChatHistory([])
     setShowChatDialog(true)
   }
 
   const handleSendMessage = async () => {
-    if (!chatMessage.trim()) return
+    if (!chatMessage.trim() || !selectedBot) return
 
     const newHistory = [...chatHistory, { role: "user", message: chatMessage }]
     setChatHistory(newHistory)
     setChatMessage("")
     setIsGenerating(true)
 
-    // Simulate bot response
+    // Simulate bot response based on the bot's prompt
     setTimeout(() => {
-      const responses = {
-        "The Philosopher": `🤔 *ponders deeply* You raise a fascinating point. Let me debate this with myself... Self 1: "${chatMessage}" suggests a fundamental question about existence. Self 2: But wait, isn't the very act of questioning proof of consciousness? Self 1: Exactly! The doubt validates the reality! *continues internal philosophical debate*`,
-        "Dream Painter": `✨ *closes eyes and visualizes* I see your words transforming into colors... *begins sketching* Your message creates an image of swirling blues and golden threads, like thoughts becoming tangible. The canvas shows a landscape where your words bloom into flowers of meaning. Would you like me to add more detail to this dream-painting?`,
-        "Time Traveler": `*adjusts temporal goggles* Fascinating! Let me explain this to someone from the past... "Dear Leonardo da Vinci, imagine if your notebooks could instantly share ideas across the world! This human asks: '${chatMessage}' - which in your time would be like having a town crier who could speak to every person in every village simultaneously!" *chuckles* He'd probably want to invent it immediately! 🎨⚡`,
-        "Emotion Translator": `📊 *calculates emotional coefficients* Let me translate your message into mathematical terms... Your emotional state = (curiosity × 0.7) + (engagement × 0.9) - (uncertainty × 0.2). The sentiment vector shows: Hope = 85%, Interest = 92%, Complexity = 78%. In equation form: Feeling(t) = ∫(wonder + connection)dt. Quite a beautiful emotional formula! 🔢✨`,
-        "Comedy Central": `😄 *adjusts comedy goggles* Oh, you want to know about that? Well, it's like quantum entanglement - spooky action at a distance, but instead of particles, it's dad jokes! Why don't quantum physicists ever get lost? Because they're always in a superposition of knowing exactly where they are AND having no clue! *ba dum tss* 🥁`,
-        "Wise Tree": `🌳 *rustles ancient leaves thoughtfully* Ah, young sapling, your question reminds me of the seasons I've witnessed... In my 800 years, I've learned that growth comes not from rushing toward the sun, but from deepening roots in rich soil. Your inquiry is like a seed - plant it in patience, water it with curiosity, and watch wisdom bloom in its own time. *creaks wisely in the wind* 🍃`,
+      let botResponse = "";
+      
+      if (selectedBot.responses && selectedBot.responses.length > 0) {
+        // Use one of the bot's predefined responses
+        botResponse = selectedBot.responses[Math.floor(Math.random() * selectedBot.responses.length)];
+      } else {
+        // Generate a generic response based on the bot's prompt
+        botResponse = `*thinking in character* Based on my nature as "${selectedBot.prompt}", here's my response: ${chatMessage} is quite interesting! Let me share my unique perspective on this... *responds in character based on my special abilities* 🤖✨`;
       }
-
-      const botResponse =
-        responses[selectedBot.name as keyof typeof responses] ||
-        `*thinking in character* Based on my nature as "${selectedBot.prompt}", here's my response: ${chatMessage} is quite interesting! Let me share my unique perspective on this... *responds in character based on my special abilities* 🤖✨`
 
       setChatHistory([...newHistory, { role: "bot", message: botResponse }])
       setIsGenerating(false)
@@ -200,12 +163,25 @@ export default function GalleryPage() {
       setLikedBots(likedBots.filter((id) => id !== botId))
     } else {
       setLikedBots([...likedBots, botId])
-      // Update likes count
-      const bot = bots.find((b) => b.id === botId)
-      if (bot) {
-        bot.likes += likedBots.includes(botId) ? -1 : 1
-      }
     }
+  }
+
+  const calculateRating = (bot: Bot) => {
+    if (bot.views === 0) return 0;
+    return (bot.likes / bot.views) * 5;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-orange-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading bot gallery...</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -214,207 +190,226 @@ export default function GalleryPage() {
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+            <Button variant="ghost" size="sm" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Home
+              Back
             </Button>
             <div className="flex items-center space-x-2">
               <Bot className="h-6 w-6 text-purple-600" />
               <h1 className="font-bold text-xl">Bot Gallery</h1>
             </div>
           </div>
-          <Badge className="bg-gradient-to-r from-purple-600 to-orange-500 text-white">{bots.length} Bots</Badge>
+          <Badge className="bg-gradient-to-r from-purple-600 to-orange-500 text-white">
+            {bots.length} Bots Available
+          </Badge>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto">
-          {/* Introduction */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-orange-500 bg-clip-text text-transparent">
-              Community Creations
+        <div className="max-w-7xl mx-auto">
+          {/* Hero Section */}
+          <div className="text-center mb-12">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-orange-500 bg-clip-text text-transparent">
+              AI Bot Gallery
             </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Discover amazing AI bots created by our community. Vote for your favorites, get inspired, and see what's
-              possible with creative prompts.
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Discover amazing AI personalities created by the community. Chat with them, rate them, and get inspired for your own creations.
             </p>
           </div>
 
           {/* Search and Filters */}
-          <div className="flex flex-col md:flex-row gap-4 mb-8">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search bots, creators, or prompts..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+          <div className="bg-white rounded-lg shadow-sm border p-6 mb-8">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search bots by name, prompt, or creator..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <Select value={filterBy} onValueChange={setFilterBy}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="popular">Most Popular</SelectItem>
+                    <SelectItem value="rating">Highest Rated</SelectItem>
+                    <SelectItem value="newest">Newest</SelectItem>
+                    <SelectItem value="weirdness">Most Weird</SelectItem>
+                    <SelectItem value="likes">Most Liked</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="popular">Most Popular</SelectItem>
-                <SelectItem value="rating">Highest Rated</SelectItem>
-                <SelectItem value="newest">Newest</SelectItem>
-                <SelectItem value="points">Most Points</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterBy} onValueChange={setFilterBy}>
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Filter by category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="philosophy">Philosophy</SelectItem>
-                <SelectItem value="creative">Creative</SelectItem>
-                <SelectItem value="educational">Educational</SelectItem>
-                <SelectItem value="science">Science</SelectItem>
-                <SelectItem value="comedy">Comedy</SelectItem>
-                <SelectItem value="wisdom">Wisdom</SelectItem>
-              </SelectContent>
-            </Select>
+          </div>
+
+          {/* Results Count */}
+          <div className="mb-6">
+            <p className="text-gray-600">
+              Showing {filteredBots.length} of {bots.length} bots
+            </p>
           </div>
 
           {/* Bot Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedBots.map((bot) => (
-              <Card key={bot.id} className="hover:shadow-lg transition-shadow cursor-pointer">
-                <CardHeader>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-orange-500 rounded-full flex items-center justify-center">
-                        <Bot className="h-6 w-6 text-white" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg">{bot.name}</CardTitle>
-                        <p className="text-sm text-gray-600">{bot.creator}</p>
+          {filteredBots.length === 0 ? (
+            <div className="text-center py-16">
+              <Bot className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">No bots found</h3>
+              <p className="text-gray-500 mb-4">Try adjusting your search or filters</p>
+              <Button onClick={() => {
+                setSearchTerm("");
+                setFilterBy("all");
+              }}>
+                Clear Filters
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sortedBots.map((bot) => (
+                <Card key={bot._id} className="hover:shadow-lg transition-shadow cursor-pointer">
+                  <CardHeader>
+                    <div className="flex items-start justify-between mb-2">
+                      <CardTitle className="text-lg">{bot.name}</CardTitle>
+                      {getStatusBadge(bot)}
+                    </div>
+                    <CardDescription className="text-sm line-clamp-2">
+                      {bot.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Prompt:</span> "{bot.prompt}"
+                      </p>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">by {bot.creator}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {bot.category}
+                        </Badge>
                       </div>
                     </div>
-                    {getStatusBadge(bot.status)}
-                  </div>
-                  <CardDescription className="text-sm italic">"{bot.prompt}"</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-gray-700">{bot.description}</p>
 
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center">
-                        <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                        <span className="font-medium">{bot.rating}</span>
-                        <span className="text-gray-500 ml-1">({bot.votes})</span>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-1">
+                        <Star className="h-4 w-4 text-yellow-500" />
+                        <span className="font-medium">{calculateRating(bot).toFixed(1)}</span>
+                        <span className="text-gray-500">({bot.views} views)</span>
                       </div>
-                      <div className="flex items-center">
-                        <Heart
-                          className={`h-4 w-4 mr-1 ${likedBots.includes(bot.id) ? "text-red-500 fill-current" : "text-red-500"}`}
-                        />
+                      <div className="flex items-center space-x-1">
+                        <Heart className="h-4 w-4 text-red-500" />
                         <span>{bot.likes}</span>
                       </div>
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {bot.category}
-                    </Badge>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
-                    <div>
-                      <span className="font-medium">Tournaments:</span> {bot.tournaments}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleChatWithBot(bot)}
+                      >
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Chat
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={likedBots.includes(bot._id) ? "default" : "outline"}
+                        onClick={() => handleLikeBot(bot._id)}
+                      >
+                        <Heart className={`h-4 w-4 ${likedBots.includes(bot._id) ? "text-white" : "text-red-500"}`} />
+                      </Button>
                     </div>
-                    <div>
-                      <span className="font-medium">Points:</span> {bot.points.toLocaleString()}
-                    </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
 
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 bg-transparent"
-                      onClick={() => handleChatWithBot(bot)}
-                    >
-                      <MessageSquare className="h-3 w-3 mr-1" />
-                      Chat
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={`flex-1 ${likedBots.includes(bot.id) ? "bg-red-50 border-red-200" : ""}`}
-                      onClick={() => handleLikeBot(bot.id)}
-                    >
-                      <Heart
-                        className={`h-3 w-3 mr-1 ${likedBots.includes(bot.id) ? "text-red-500 fill-current" : ""}`}
-                      />
-                      {likedBots.includes(bot.id) ? "Liked" : "Like"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          {/* CTA Section */}
+          <div className="text-center mt-16">
+            <Card className="bg-gradient-to-r from-purple-600 to-orange-500 text-white border-0">
+              <CardContent className="pt-8 pb-8">
+                <h3 className="text-2xl font-bold mb-4">Inspired by what you see?</h3>
+                <p className="text-lg opacity-90 mb-6">
+                  Create your own AI bot and add it to the gallery!
+                </p>
+                <Button
+                  size="lg"
+                  className="bg-white text-purple-600 hover:bg-gray-100"
+                  onClick={() => router.push("/create")}
+                >
+                  <Bot className="mr-2 h-5 w-5" />
+                  Create Your Bot
+                </Button>
+              </CardContent>
+            </Card>
           </div>
-
-          {sortedBots.length === 0 && (
-            <div className="text-center py-12">
-              <Bot className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-600 mb-2">No bots found</h3>
-              <p className="text-gray-500">Try adjusting your search or filters</p>
-            </div>
-          )}
-
-          {/* Load More */}
-          {sortedBots.length > 0 && (
-            <div className="text-center mt-8">
-              <Button variant="outline" size="lg">
-                Load More Bots
-              </Button>
-            </div>
-          )}
         </div>
       </div>
 
       {/* Chat Dialog */}
       <Dialog open={showChatDialog} onOpenChange={setShowChatDialog}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-orange-500 rounded-full flex items-center justify-center">
-                <Bot className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <DialogTitle>{selectedBot?.name}</DialogTitle>
-                <DialogDescription>"{selectedBot?.prompt}"</DialogDescription>
-              </div>
-            </div>
+            <DialogTitle className="flex items-center">
+              <Bot className="h-5 w-5 mr-2" />
+              Chat with {selectedBot?.name}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedBot?.prompt}
+            </DialogDescription>
           </DialogHeader>
-
-          <div className="flex-1 flex flex-col min-h-0">
+          
+          <div className="space-y-4">
             {/* Chat History */}
-            <div className="flex-1 overflow-y-auto space-y-4 p-4 bg-gray-50 rounded-lg mb-4">
+            <div className="h-64 overflow-y-auto border rounded-lg p-4 space-y-3">
               {chatHistory.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
-                  <Bot className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                  <MessageSquare className="h-8 w-8 mx-auto mb-2" />
                   <p>Start a conversation with {selectedBot?.name}!</p>
-                  <p className="text-sm">Try asking something related to: "{selectedBot?.prompt}"</p>
                 </div>
               ) : (
                 chatHistory.map((chat, index) => (
-                  <div key={index} className={`flex ${chat.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    key={index}
+                    className={`flex ${chat.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
                     <div
-                      className={`max-w-[80%] p-3 rounded-lg ${
-                        chat.role === "user" ? "bg-purple-600 text-white" : "bg-white border"
+                      className={`max-w-xs p-3 rounded-lg ${
+                        chat.role === "user"
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-100 text-gray-900"
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap">{chat.message}</p>
+                      <p className="text-sm">{chat.message}</p>
                     </div>
                   </div>
                 ))
               )}
               {isGenerating && (
                 <div className="flex justify-start">
-                  <div className="bg-white border p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">*{selectedBot?.name} is thinking...*</p>
+                  <div className="bg-gray-100 text-gray-900 p-3 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                      <span className="text-sm">Thinking...</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -423,17 +418,17 @@ export default function GalleryPage() {
             {/* Message Input */}
             <div className="flex gap-2">
               <Textarea
-                placeholder={`Chat with ${selectedBot?.name}...`}
+                placeholder="Type your message..."
                 value={chatMessage}
                 onChange={(e) => setChatMessage(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
-                className="flex-1 min-h-[60px] max-h-[120px]"
-                disabled={isGenerating}
+                onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+                className="flex-1"
+                rows={2}
               />
               <Button
                 onClick={handleSendMessage}
                 disabled={!chatMessage.trim() || isGenerating}
-                className="bg-gradient-to-r from-purple-600 to-orange-500 text-white"
+                className="px-6"
               >
                 <Send className="h-4 w-4" />
               </Button>

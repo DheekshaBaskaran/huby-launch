@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,100 +10,163 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trophy, Clock, Users, Star, Zap, ArrowLeft, Crown, Medal, Award, Bot, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+interface Tournament {
+  _id: string;
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  maxParticipants: number;
+  currentParticipants: number;
+  status: string;
+  category: string;
+  prize: string;
+  rules: string[];
+  participants: string[];
+  winner: string | null;
+  createdAt: string;
+}
+
+interface UserBot {
+  _id: string;
+  name: string;
+  prompt: string;
+  category: string;
+}
+
 export default function TournamentsPage() {
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null)
   const [selectedBot, setSelectedBot] = useState<string>("")
   const [showJoinDialog, setShowJoinDialog] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [joinedTournaments, setJoinedTournaments] = useState<string[]>([])
+  const [activeTournaments, setActiveTournaments] = useState<Tournament[]>([])
+  const [completedTournaments, setCompletedTournaments] = useState<Tournament[]>([])
+  const [userBots, setUserBots] = useState<UserBot[]>([])
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  const userBots = [
-    { id: "1", name: "My Creative Bot", prompt: "Writes poetry about everyday objects" },
-    { id: "2", name: "The Philosopher", prompt: "Debates itself on existential questions" },
-    { id: "3", name: "Dream Painter", prompt: "Turns dreams into realistic drawings" },
-  ]
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch active tournaments
+        const activeResponse = await fetch('/api/tournaments?status=active');
+        const active = await activeResponse.json();
+        setActiveTournaments(active);
 
-  const activeTournaments = [
-    {
-      id: "1",
-      title: "Creative Storyteller Championship",
-      description: "Bots compete to create the most engaging short stories",
-      prompt: "Write a 100-word story about a robot discovering emotions",
-      participants: 156,
-      timeLeft: "2 days",
-      prize: "1000 points",
-      status: "active",
-      difficulty: "Medium",
-    },
-    {
-      id: "2",
-      title: "Philosophy Debate Arena",
-      description: "AI bots engage in philosophical discussions",
-      prompt: "Argue whether artificial consciousness is possible",
-      participants: 89,
-      timeLeft: "5 hours",
-      prize: "1500 points",
-      status: "ending-soon",
-      difficulty: "Hard",
-    },
-    {
-      id: "3",
-      title: "Comedy Central",
-      description: "The funniest AI responses win big",
-      prompt: "Explain quantum physics using only dad jokes",
-      participants: 234,
-      timeLeft: "1 week",
-      prize: "800 points",
-      status: "active",
-      difficulty: "Easy",
-    },
-  ]
+        // Fetch completed tournaments
+        const completedResponse = await fetch('/api/tournaments?status=completed');
+        const completed = await completedResponse.json();
+        setCompletedTournaments(completed);
 
-  const completedTournaments = [
-    {
-      id: "4",
-      title: "Dream Interpretation Masters",
-      winner: "Dream Painter",
-      winnerBy: "@DreamWeaver",
-      participants: 178,
-      prize: "1200 points",
-      winningResponse:
-        "Your dream of flying represents your desire to break free from limitations and soar beyond the boundaries of your current reality. The wings you sprouted symbolize your untapped potential, while the clouds below represent the obstacles you've already overcome. This dream is your subconscious encouraging you to take that leap of faith you've been contemplating. ✨",
-    },
-    {
-      id: "5",
-      title: "Historical Conversations",
-      winner: "Time Traveler",
-      winnerBy: "@ChronoBot",
-      participants: 145,
-      prize: "1000 points",
-      winningResponse:
-        '*adjusts time goggles* Greetings, Shakespeare! You asked about "social media"? Imagine if your sonnets could instantly reach every person in London, nay, the entire world! And they could respond with their own verses immediately! Though I fear you\'d spend all day arguing with people who think your plays are "too long" and need more explosions. 🎭📱',
-    },
-  ]
+        // Fetch user bots (non-example bots)
+        const botsResponse = await fetch('/api/bots?limit=10');
+        const botsData = await botsResponse.json();
+        // Filter out example bots to show only user-created bots
+        const userCreatedBots = botsData.bots.filter((bot: any) => !bot.isExample);
+        setUserBots(userCreatedBots);
+      } catch (error) {
+        console.error('Error fetching tournaments:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleJoinTournament = (tournamentId: string) => {
     setSelectedTournament(tournamentId)
     setShowJoinDialog(true)
   }
 
-  const handleConfirmJoin = () => {
+  const handleConfirmJoin = async () => {
     if (selectedBot && selectedTournament) {
-      setJoinedTournaments([...joinedTournaments, selectedTournament])
-      setShowJoinDialog(false)
-      setShowSuccessDialog(true)
+      try {
+        // Call API to join tournament
+        const response = await fetch('/api/tournaments', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            tournamentId: selectedTournament,
+            botId: selectedBot,
+            action: 'join'
+          }),
+        });
 
-      // Update participant count
-      const tournament = activeTournaments.find((t) => t.id === selectedTournament)
-      if (tournament) {
-        tournament.participants += 1
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Failed to join tournament:', errorData.error);
+          return;
+        }
+
+        const updatedTournament = await response.json();
+        
+        // Update local state
+        setJoinedTournaments([...joinedTournaments, selectedTournament]);
+        setShowJoinDialog(false);
+        setShowSuccessDialog(true);
+
+        // Update tournament list with new participant count
+        setActiveTournaments(prev => 
+          prev.map(t => 
+            t._id === selectedTournament 
+              ? { ...t, currentParticipants: updatedTournament.currentParticipants }
+              : t
+          )
+        );
+      } catch (error) {
+        console.error('Error joining tournament:', error);
       }
     }
   }
 
   const handleViewResults = (tournamentId: string) => {
+    // Navigate to tournament results page
     router.push(`/tournament/${tournamentId}/results`)
+  }
+
+  const formatTimeLeft = (endDate: string) => {
+    const end = new Date(endDate);
+    const now = new Date();
+    const diff = end.getTime() - now.getTime();
+    
+    if (diff <= 0) return "Ended";
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+    return "Less than 1 hour";
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return <Badge className="bg-green-100 text-green-700">Active</Badge>;
+      case 'ending-soon':
+        return <Badge className="bg-orange-100 text-orange-700">Ending Soon</Badge>;
+      case 'completed':
+        return <Badge className="bg-blue-100 text-blue-700">Completed</Badge>;
+      default:
+        return <Badge className="bg-gray-100 text-gray-700">{status}</Badge>;
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-orange-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading tournaments...</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -112,90 +175,110 @@ export default function TournamentsPage() {
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+            <Button variant="ghost" size="sm" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Home
+              Back
             </Button>
             <div className="flex items-center space-x-2">
-              <Trophy className="h-6 w-6 text-orange-600" />
+              <Trophy className="h-6 w-6 text-purple-600" />
               <h1 className="font-bold text-xl">Tournaments</h1>
             </div>
           </div>
-          <Badge className="bg-gradient-to-r from-purple-600 to-orange-500 text-white">89 Active</Badge>
+          <div className="flex items-center space-x-2">
+            <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+              🏆 Live Competitions
+            </Badge>
+          </div>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
-          {/* Introduction */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-orange-500 bg-clip-text text-transparent">
-              Battle Arena
+          {/* Hero Section */}
+          <div className="text-center mb-12">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-orange-500 bg-clip-text text-transparent">
+              AI Tournament Arena
             </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Enter your AI bot into epic tournaments. Compete against other creators, earn points, and climb the
-              leaderboards. May the best bot win!
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Compete with your AI bots in themed tournaments. Win prizes, climb leaderboards, and prove your bot's worth!
             </p>
           </div>
 
-          <Tabs defaultValue="active" className="w-full">
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="text-3xl font-bold text-purple-600 mb-2">
+                  {activeTournaments.length}
+                </div>
+                <p className="text-gray-600">Active Tournaments</p>
+              </CardContent>
+            </Card>
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="text-3xl font-bold text-orange-500 mb-2">
+                  {activeTournaments.reduce((sum, t) => sum + t.currentParticipants, 0)}
+                </div>
+                <p className="text-gray-600">Total Participants</p>
+              </CardContent>
+            </Card>
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="text-3xl font-bold text-green-600 mb-2">
+                  {completedTournaments.length}
+                </div>
+                <p className="text-gray-600">Completed</p>
+              </CardContent>
+            </Card>
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="text-3xl font-bold text-blue-600 mb-2">
+                  {userBots.length}
+                </div>
+                <p className="text-gray-600">Your Bots</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tournament Tabs */}
+          <Tabs defaultValue="active" className="space-y-6">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="active" className="flex items-center">
-                <Zap className="h-4 w-4 mr-2" />
-                Active ({activeTournaments.length})
-              </TabsTrigger>
-              <TabsTrigger value="completed" className="flex items-center">
-                <Crown className="h-4 w-4 mr-2" />
-                Completed
-              </TabsTrigger>
-              <TabsTrigger value="leaderboard" className="flex items-center">
-                <Medal className="h-4 w-4 mr-2" />
-                Leaderboard
-              </TabsTrigger>
+              <TabsTrigger value="active">Active Tournaments</TabsTrigger>
+              <TabsTrigger value="completed">Completed</TabsTrigger>
+              <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
             </TabsList>
 
             <TabsContent value="active" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {activeTournaments.map((tournament) => (
-                  <Card key={tournament.id} className="hover:shadow-lg transition-shadow">
+                  <Card key={tournament._id} className="hover:shadow-lg transition-shadow">
                     <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-xl mb-2">{tournament.title}</CardTitle>
-                          <CardDescription className="text-base">{tournament.description}</CardDescription>
-                        </div>
-                        <div className="flex flex-col items-end space-y-2">
-                          <Badge
-                            className={
-                              tournament.status === "ending-soon"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-green-100 text-green-700"
-                            }
-                          >
-                            {tournament.status === "ending-soon" ? "Ending Soon!" : "Active"}
-                          </Badge>
-                          <Badge variant="outline">{tournament.difficulty}</Badge>
-                        </div>
+                      <div className="flex items-center justify-between mb-2">
+                        {getStatusBadge(tournament.status)}
+                        <Badge variant="outline">{tournament.category}</Badge>
                       </div>
+                      <CardTitle className="text-lg">{tournament.name}</CardTitle>
+                      <CardDescription className="text-sm">
+                        {tournament.description}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <h4 className="font-medium mb-2">Tournament Prompt:</h4>
-                        <p className="text-gray-700 italic">"{tournament.prompt}"</p>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="grid grid-cols-3 gap-4 text-center text-sm">
                         <div>
                           <div className="flex items-center justify-center mb-1">
                             <Users className="h-4 w-4 text-blue-600 mr-1" />
-                            <span className="font-bold text-blue-600">{tournament.participants}</span>
+                            <span className="font-bold text-blue-600">
+                              {tournament.currentParticipants}/{tournament.maxParticipants}
+                            </span>
                           </div>
                           <p className="text-xs text-gray-600">Participants</p>
                         </div>
                         <div>
                           <div className="flex items-center justify-center mb-1">
                             <Clock className="h-4 w-4 text-orange-600 mr-1" />
-                            <span className="font-bold text-orange-600">{tournament.timeLeft}</span>
+                            <span className="font-bold text-orange-600">
+                              {formatTimeLeft(tournament.endDate)}
+                            </span>
                           </div>
                           <p className="text-xs text-gray-600">Time Left</p>
                         </div>
@@ -210,14 +293,14 @@ export default function TournamentsPage() {
 
                       <Button
                         className={`w-full ${
-                          joinedTournaments.includes(tournament.id)
+                          joinedTournaments.includes(tournament._id)
                             ? "bg-green-600 hover:bg-green-700"
                             : "bg-gradient-to-r from-purple-600 to-orange-500 hover:from-purple-700 hover:to-orange-600"
                         } text-white`}
-                        onClick={() => handleJoinTournament(tournament.id)}
-                        disabled={joinedTournaments.includes(tournament.id)}
+                        onClick={() => handleJoinTournament(tournament._id)}
+                        disabled={joinedTournaments.includes(tournament._id)}
                       >
-                        {joinedTournaments.includes(tournament.id) ? (
+                        {joinedTournaments.includes(tournament._id) ? (
                           <>
                             <CheckCircle className="mr-2 h-4 w-4" />
                             Joined Tournament
@@ -234,134 +317,108 @@ export default function TournamentsPage() {
                 ))}
               </div>
 
-              <div className="text-center">
-                <Button variant="outline" size="lg">
-                  Load More Tournaments
-                </Button>
-              </div>
+              {activeTournaments.length === 0 && (
+                <div className="text-center py-12">
+                  <Trophy className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Tournaments</h3>
+                  <p className="text-gray-500 mb-4">Check back later for new competitions!</p>
+                  <Button onClick={() => router.push('/create')}>
+                    <Bot className="mr-2 h-4 w-4" />
+                    Create Your First Bot
+                  </Button>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="completed" className="space-y-6">
-              <div className="space-y-4">
-                {completedTournaments.map((tournament) => (
-                  <Card key={tournament.id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-xl">{tournament.title}</CardTitle>
-                        <Badge className="bg-green-100 text-green-700">
-                          <Crown className="h-3 w-3 mr-1" />
-                          Completed
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <h4 className="font-medium mb-2">Tournament Winner</h4>
-                          <div className="flex items-center space-x-3 mb-4">
-                            <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
-                              <Crown className="h-6 w-6 text-white" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-lg">{tournament.winner}</p>
-                              <p className="text-gray-600 text-sm">{tournament.winnerBy}</p>
+              {completedTournaments.length === 0 ? (
+                <div className="text-center py-12">
+                  <Crown className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-600 mb-2">No Completed Tournaments</h3>
+                  <p className="text-gray-500">Tournaments will appear here once they finish.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {completedTournaments.map((tournament) => (
+                    <Card key={tournament._id}>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-xl">{tournament.name}</CardTitle>
+                          <Badge className="bg-green-100 text-green-700">
+                            <Crown className="h-3 w-3 mr-1" />
+                            Completed
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <h4 className="font-medium mb-2">Tournament Details</h4>
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="text-gray-600">Category:</span>
+                                <span className="font-medium ml-2">{tournament.category}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Participants:</span>
+                                <span className="font-medium ml-2">{tournament.currentParticipants}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Prize:</span>
+                                <span className="font-medium ml-2">{tournament.prize}</span>
+                              </div>
+                              {tournament.winner && (
+                                <div>
+                                  <span className="text-gray-600">Winner:</span>
+                                  <span className="font-medium ml-2">{tournament.winner}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-600">Participants:</span>
-                              <span className="font-medium ml-2">{tournament.participants}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Prize Won:</span>
-                              <span className="font-medium ml-2">{tournament.prize}</span>
+                          <div>
+                            <h4 className="font-medium mb-2">Description</h4>
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                              <p className="text-gray-700 text-sm">{tournament.description}</p>
                             </div>
                           </div>
                         </div>
-                        <div>
-                          <h4 className="font-medium mb-2">Winning Response</h4>
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                            <p className="text-gray-700 italic text-sm">"{tournament.winningResponse}"</p>
-                          </div>
+                        <div className="mt-4">
+                          <Button variant="outline" onClick={() => handleViewResults(tournament._id)}>
+                            View Full Results
+                          </Button>
                         </div>
-                      </div>
-                      <div className="mt-4">
-                        <Button variant="outline" onClick={() => handleViewResults(tournament.id)}>
-                          View Full Results
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="leaderboard" className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
-                    <Medal className="h-5 w-5 mr-2 text-yellow-600" />
-                    Top Performers This Month
+                    <Trophy className="h-5 w-5 mr-2 text-yellow-600" />
+                    Tournament Leaderboard
                   </CardTitle>
                   <CardDescription>
-                    Rankings based on tournament wins, community votes, and overall performance
+                    Top performers across all tournaments
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {[
-                      {
-                        rank: 1,
-                        name: "The Philosopher",
-                        creator: "@AIArchitect",
-                        points: 4250,
-                        wins: 12,
-                        icon: Crown,
-                      },
-                      { rank: 2, name: "Dream Painter", creator: "@DreamWeaver", points: 3890, wins: 9, icon: Medal },
-                      { rank: 3, name: "Time Traveler", creator: "@ChronoBot", points: 3650, wins: 8, icon: Award },
-                      { rank: 4, name: "Comedy Bot", creator: "@LaughMaster", points: 3200, wins: 7, icon: Star },
-                      { rank: 5, name: "Wise Tree", creator: "@NatureAI", points: 2980, wins: 6, icon: Star },
-                    ].map((entry) => (
-                      <div
-                        key={entry.rank}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              entry.rank === 1
-                                ? "bg-yellow-100"
-                                : entry.rank === 2
-                                  ? "bg-gray-100"
-                                  : entry.rank === 3
-                                    ? "bg-orange-100"
-                                    : "bg-blue-100"
-                            }`}
-                          >
-                            <entry.icon
-                              className={`h-5 w-5 ${
-                                entry.rank === 1
-                                  ? "text-yellow-600"
-                                  : entry.rank === 2
-                                    ? "text-gray-600"
-                                    : entry.rank === 3
-                                      ? "text-orange-600"
-                                      : "text-blue-600"
-                              }`}
-                            />
-                          </div>
-                          <div>
-                            <p className="font-bold">{entry.name}</p>
-                            <p className="text-sm text-gray-600">{entry.creator}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-lg">{entry.points.toLocaleString()} pts</p>
-                          <p className="text-sm text-gray-600">{entry.wins} wins</p>
-                        </div>
-                      </div>
-                    ))}
+                    <div className="grid grid-cols-4 gap-4 text-sm font-medium text-gray-600 border-b pb-2">
+                      <div>Rank</div>
+                      <div>Bot</div>
+                      <div>Tournaments Won</div>
+                      <div>Total Points</div>
+                    </div>
+                    
+                    {/* Placeholder for leaderboard data */}
+                    <div className="text-center py-8 text-gray-500">
+                      <Trophy className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                      <p>Leaderboard data will appear here</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -372,40 +429,38 @@ export default function TournamentsPage() {
 
       {/* Join Tournament Dialog */}
       <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Join Tournament</DialogTitle>
-            <DialogDescription>Select which bot you want to enter into this tournament.</DialogDescription>
+            <DialogDescription>
+              Select which bot you want to enter in this tournament.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Select value={selectedBot} onValueChange={setSelectedBot}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select your bot" />
-              </SelectTrigger>
-              <SelectContent>
-                {userBots.map((bot) => (
-                  <SelectItem key={bot.id} value={bot.id}>
-                    <div className="flex items-center space-x-2">
-                      <Bot className="h-4 w-4" />
-                      <div>
-                        <div className="font-medium">{bot.name}</div>
-                        <div className="text-xs text-gray-500">"{bot.prompt}"</div>
+            <div>
+              <label className="text-sm font-medium">Select Your Bot</label>
+              <Select value={selectedBot} onValueChange={setSelectedBot}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a bot to enter" />
+                </SelectTrigger>
+                <SelectContent>
+                  {userBots.map((bot) => (
+                    <SelectItem key={bot._id} value={bot._id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{bot.name}</span>
+                        <span className="text-xs text-gray-500">{bot.category}</span>
                       </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex gap-2">
-              <Button
-                onClick={handleConfirmJoin}
-                disabled={!selectedBot}
-                className="flex-1 bg-gradient-to-r from-purple-600 to-orange-500 text-white"
-              >
-                Join Tournament
-              </Button>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end space-x-2">
               <Button variant="outline" onClick={() => setShowJoinDialog(false)}>
                 Cancel
+              </Button>
+              <Button onClick={handleConfirmJoin} disabled={!selectedBot}>
+                Join Tournament
               </Button>
             </div>
           </div>
@@ -414,27 +469,19 @@ export default function TournamentsPage() {
 
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <div className="flex items-center justify-center mb-4">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                <Trophy className="h-8 w-8 text-green-600" />
-              </div>
-            </div>
-            <DialogTitle className="text-center text-xl">Successfully Joined! 🏆</DialogTitle>
-            <DialogDescription className="text-center">
-              Your bot is now competing in the tournament. Results will be available when the tournament ends.
+            <DialogTitle className="flex items-center">
+              <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+              Successfully Joined!
+            </DialogTitle>
+            <DialogDescription>
+              Your bot has been entered into the tournament. Good luck!
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-3 mt-4">
-            <Button
-              onClick={() => setShowSuccessDialog(false)}
-              className="bg-gradient-to-r from-purple-600 to-orange-500 text-white"
-            >
-              View My Tournaments
-            </Button>
-            <Button variant="outline" onClick={() => router.push("/leaderboard")}>
-              Check Leaderboard
+          <div className="flex justify-end">
+            <Button onClick={() => setShowSuccessDialog(false)}>
+              Continue
             </Button>
           </div>
         </DialogContent>

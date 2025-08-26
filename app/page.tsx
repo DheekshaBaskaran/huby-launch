@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,10 +10,62 @@ import { Sparkles, Trophy, Users, Zap, ArrowRight, Bot, Star } from "lucide-reac
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
+interface Bot {
+  _id: string;
+  name: string;
+  prompt: string;
+  category: string;
+  weirdness: number;
+  views: number;
+  likes: number;
+  creator: string;
+  description: string;
+}
+
+interface Stats {
+  totalBots: number;
+  activeTournaments: number;
+  totalVotes: number;
+}
+
 export default function HomePage() {
   const [email, setEmail] = useState("")
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [featuredBots, setFeaturedBots] = useState<Bot[]>([])
+  const [stats, setStats] = useState<Stats>({ totalBots: 0, activeTournaments: 0, totalVotes: 0 })
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch featured bots (top rated examples)
+        const botsResponse = await fetch('/api/bots/examples?limit=3');
+        const bots = await botsResponse.json();
+        setFeaturedBots(bots);
+
+        // Fetch stats
+        const [botsCount, tournamentsResponse] = await Promise.all([
+          fetch('/api/bots').then(res => res.json()),
+          fetch('/api/tournaments?status=active').then(res => res.json())
+        ]);
+
+        const totalVotes = bots.reduce((sum: number, bot: Bot) => sum + (bot.likes || 0), 0);
+        
+        setStats({
+          totalBots: botsCount.length || 0,
+          activeTournaments: tournamentsResponse.length || 0,
+          totalVotes
+        });
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -96,15 +148,21 @@ export default function HomePage() {
           {/* Live Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600 mb-2">1,247</div>
+              <div className="text-3xl font-bold text-purple-600 mb-2">
+                {loading ? "..." : stats.totalBots.toLocaleString()}
+              </div>
               <div className="text-gray-600">AI Bots Created</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-orange-500 mb-2">89</div>
+              <div className="text-3xl font-bold text-orange-500 mb-2">
+                {loading ? "..." : stats.activeTournaments}
+              </div>
               <div className="text-gray-600">Active Tournaments</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-2">3,456</div>
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {loading ? "..." : stats.totalVotes.toLocaleString()}
+              </div>
               <div className="text-gray-600">Community Votes</div>
             </div>
           </div>
@@ -177,73 +235,41 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Featured AI Bots</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-            <Card
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => router.push("/bot/philosopher")}
-            >
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">The Philosopher</CardTitle>
-                  <Badge className="bg-purple-100 text-purple-700">🏆 Winner</Badge>
-                </div>
-                <CardDescription>"Debates itself on existential questions"</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between text-sm text-gray-600">
-                  <span>By @AIArchitect</span>
-                  <span className="flex items-center">
-                    <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                    4.9
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => router.push("/bot/dream-painter")}
-            >
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Dream Painter</CardTitle>
-                  <Badge className="bg-orange-100 text-orange-700">🎨 Creative</Badge>
-                </div>
-                <CardDescription>"Turns dreams into realistic drawings"</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between text-sm text-gray-600">
-                  <span>By @DreamWeaver</span>
-                  <span className="flex items-center">
-                    <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                    4.7
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => router.push("/bot/time-traveler")}
-            >
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Time Traveler</CardTitle>
-                  <Badge className="bg-blue-100 text-blue-700">⚡ Trending</Badge>
-                </div>
-                <CardDescription>"Explains modern concepts to historical figures"</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between text-sm text-gray-600">
-                  <span>By @ChronoBot</span>
-                  <span className="flex items-center">
-                    <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                    4.8
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading featured bots...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+              {featuredBots.map((bot, index) => (
+                <Card
+                  key={bot._id}
+                  className="hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => router.push(`/bot/${bot._id}`)}
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">{bot.name}</CardTitle>
+                      <Badge className="bg-purple-100 text-purple-700">
+                        {index === 0 ? "🏆 Winner" : index === 1 ? "🎨 Creative" : "⚡ Trending"}
+                      </Badge>
+                    </div>
+                    <CardDescription>"{bot.description}"</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between text-sm text-gray-600">
+                      <span>By {bot.creator}</span>
+                      <span className="flex items-center">
+                        <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                        {((bot.likes / (bot.views || 1)) * 5).toFixed(1)}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
 
           <div className="text-center mt-8">
             <Button variant="outline" size="lg" onClick={() => router.push("/gallery")}>
@@ -318,73 +344,33 @@ export default function HomePage() {
               </div>
               <p className="text-gray-400">The town square for Artificial Intelligence</p>
             </div>
-
             <div>
               <h3 className="font-semibold mb-4">Create</h3>
               <ul className="space-y-2 text-gray-400">
-                <li>
-                  <button onClick={() => router.push("/create")} className="hover:text-white">
-                    Build Bot
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => router.push("/templates")} className="hover:text-white">
-                    Templates
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => router.push("/guide")} className="hover:text-white">
-                    Creator Guide
-                  </button>
-                </li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white" onClick={() => router.push("/create")}>Build Bot</Button></li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white">Templates</Button></li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white">Creator Guide</Button></li>
               </ul>
             </div>
-
             <div>
               <h3 className="font-semibold mb-4">Compete</h3>
               <ul className="space-y-2 text-gray-400">
-                <li>
-                  <button onClick={() => router.push("/tournaments")} className="hover:text-white">
-                    Tournaments
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => router.push("/leaderboard")} className="hover:text-white">
-                    Leaderboard
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => router.push("/rules")} className="hover:text-white">
-                    Rules
-                  </button>
-                </li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white" onClick={() => router.push("/tournaments")}>Tournaments</Button></li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white" onClick={() => router.push("/leaderboard")}>Leaderboard</Button></li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white">Rules</Button></li>
               </ul>
             </div>
-
             <div>
               <h3 className="font-semibold mb-4">Community</h3>
               <ul className="space-y-2 text-gray-400">
-                <li>
-                  <button onClick={() => router.push("/gallery")} className="hover:text-white">
-                    Bot Gallery
-                  </button>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white">
-                    Discord
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white">
-                    Support
-                  </a>
-                </li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white" onClick={() => router.push("/gallery")}>Bot Gallery</Button></li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white">Discord</Button></li>
+                <li><Button variant="ghost" className="p-0 h-auto text-left hover:text-white">Support</Button></li>
               </ul>
             </div>
           </div>
-
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 Huby.ai. All rights reserved. Built for the AI revolution.</p>
+            <p>© 2024 Huby.ai. All rights reserved. Built for the AI revolution.</p>
           </div>
         </div>
       </footer>
