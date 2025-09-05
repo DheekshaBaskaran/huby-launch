@@ -31,6 +31,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useWeirdExamples, useMetaPrompts, useCreateBot, Bot as BotType } from "@/lib/hooks/useBots"
 import { calculateWeirdnessScore, generateCreativityTips, generateWeirdPrompt } from "@/lib/utils/weirdnessCalculator"
+import ChatBot from "@/components/ChatBot"
 
 export default function CreateBotPage() {
   const [botName, setBotName] = useState("")
@@ -59,6 +60,10 @@ export default function CreateBotPage() {
     maxWeirdnessScore: 0
   })
   const [statsLoading, setStatsLoading] = useState(true)
+  
+  // My AIs state
+  const [myBots, setMyBots] = useState<BotType[]>([])
+  const [myBotsLoading, setMyBotsLoading] = useState(true)
 
   // Calculate weirdness score based on prompt
   useEffect(() => {
@@ -104,6 +109,42 @@ export default function CreateBotPage() {
     }
 
     fetchStats()
+  }, [])
+
+  // Fetch user's created bots using browser storage
+  useEffect(() => {
+    const fetchMyBots = async () => {
+      try {
+        setMyBotsLoading(true)
+        
+        // Get the list of bot IDs that this browser/user has created
+        const myBotIds = JSON.parse(localStorage.getItem('myCreatedBots') || '[]')
+        
+        if (myBotIds.length === 0) {
+          setMyBots([])
+          return
+        }
+        
+        // Fetch all bots and filter by the IDs we have stored
+        const response = await fetch('/api/bots?limit=1000')
+        const data = await response.json()
+        const allBots = data.bots || []
+        
+        // Filter to only include bots that this browser created
+        const myActualBots = allBots.filter((bot: any) => 
+          myBotIds.includes(bot._id)
+        )
+        
+        setMyBots(myActualBots)
+      } catch (error) {
+        console.error('Error fetching my bots:', error)
+        setMyBots([])
+      } finally {
+        setMyBotsLoading(false)
+      }
+    }
+
+    fetchMyBots()
   }, [])
 
 
@@ -181,6 +222,16 @@ export default function CreateBotPage() {
       
       const result = await createBot(botData)
       console.log('Bot created successfully:', result)
+      
+      // Save the created bot ID to browser storage so we can track it as "mine"
+      if (result && result._id) {
+        const existingBotIds = JSON.parse(localStorage.getItem('myCreatedBots') || '[]')
+        const updatedBotIds = [...existingBotIds, result._id]
+        localStorage.setItem('myCreatedBots', JSON.stringify(updatedBotIds))
+        
+        // Add the new bot to the current myBots state
+        setMyBots(prev => [...prev, result])
+      }
       
       setShowSuccessDialog(true)
     } catch (error) {
@@ -570,89 +621,70 @@ export default function CreateBotPage() {
             </TabsContent>
 
             <TabsContent value="test" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Play className="h-5 w-5 mr-2 text-green-600" />
-                    Test Your Weird AI
-                  </CardTitle>
-                  <CardDescription>
-                    See how your AI responds! The weirder the prompt, the more interesting the conversation.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="testMessage">Test Message</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="testMessage"
-                        placeholder="Type something to see how your weird AI responds..."
-                        value={testMessage}
-                        onChange={(e) => setTestMessage(e.target.value)}
-                        onKeyPress={(e) => e.key === "Enter" && handleTestBot()}
-                      />
-                      <Button onClick={handleTestBot} disabled={!testMessage.trim() || !prompt.trim() || isGenerating}>
-                        {isGenerating ? "Generating..." : "Test"}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {botResponse && (
-                    <div className="bg-gradient-to-r from-purple-50 to-orange-50 rounded-lg p-4 border">
-                      <h4 className="font-medium mb-2 flex items-center">
-                        <Bot className="h-4 w-4 mr-2 text-purple-600" />
-                        {botName || "Your Weird AI"} responds:
-                      </h4>
-                      <p className="text-gray-700 whitespace-pre-wrap">{botResponse}</p>
-                    </div>
-                  )}
-
-                  {!prompt.trim() && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                      <p className="text-yellow-800 text-sm">
-                        Create your weird AI prompt first in the "Create Bot" tab before testing!
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Bot Preview */}
-              {botName && prompt && (
+              {!prompt.trim() ? (
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Your Weird AI Preview</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-gradient-to-r from-purple-50 to-orange-50 rounded-lg p-6">
-                      <div className="flex items-center mb-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-orange-500 rounded-full flex items-center justify-center mr-4">
-                          <Bot className="h-6 w-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <h3 className="font-bold text-lg">{botName}</h3>
-                            <Badge className="bg-orange-100 text-orange-700">{weirdnessScore}% Weird</Badge>
-                          </div>
-                          <p className="text-gray-600 text-sm italic">"{prompt}"</p>
-                        </div>
-                      </div>
-                      {personality && (
-                        <div className="text-sm text-gray-600 mb-4">
-                          <strong>Extra Weird Traits:</strong> {personality}
-                        </div>
-                      )}
-                      <div className="flex items-center space-x-4 text-sm text-gray-500">
-                        <span className="flex items-center">
-                          <Eye className="h-4 w-4 mr-1" />0 views (will track after creation)
-                        </span>
-                        <span className="flex items-center">
-                          <Heart className="h-4 w-4 mr-1" />0 likes
-                        </span>
-                      </div>
+                  <CardContent className="py-12">
+                    <div className="text-center">
+                      <Bot className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Test Your Bot?</h3>
+                      <p className="text-gray-600 mb-4">
+                        Create your weird AI prompt first in the "Create Bot" tab to start chatting!
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
+              ) : (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <h2 className="text-2xl font-bold mb-2">Chat with Your AI!</h2>
+                    <p className="text-gray-600">
+                      Test your {botName || "Weird AI"} with real AI-powered responses
+                    </p>
+                  </div>
+                  
+                  <ChatBot
+                    botName={botName || "Your Weird AI"}
+                    botPrompt={prompt}
+                    initialMessage={`Hi! I'm ${botName || "your weird AI"}. ${prompt} - Let's chat!`}
+                    className="shadow-lg"
+                  />
+                  
+                  {/* Bot Preview Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Your AI Preview</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="bg-gradient-to-r from-purple-50 to-orange-50 rounded-lg p-6">
+                        <div className="flex items-center mb-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-orange-500 rounded-full flex items-center justify-center mr-4">
+                            <Bot className="h-6 w-6 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <h3 className="font-bold text-lg">{botName}</h3>
+                              <Badge className="bg-orange-100 text-orange-700">{weirdnessScore}% Weird</Badge>
+                            </div>
+                            <p className="text-gray-600 text-sm italic">"{prompt}"</p>
+                          </div>
+                        </div>
+                        {personality && (
+                          <div className="text-sm text-gray-600 mb-4">
+                            <strong>Extra Weird Traits:</strong> {personality}
+                          </div>
+                        )}
+                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                          <span className="flex items-center">
+                            <Eye className="h-4 w-4 mr-1" />0 views
+                          </span>
+                          <span className="flex items-center">
+                            <Heart className="h-4 w-4 mr-1" />0 likes
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               )}
             </TabsContent>
 
@@ -666,14 +698,96 @@ export default function CreateBotPage() {
                   <CardDescription>Track how your weird AIs are performing in the community</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-8 text-gray-500">
-                    <Bot className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                    <p className="text-lg font-medium mb-2">No AIs Created Yet</p>
-                    <p className="text-sm">Create your first weird AI to see analytics here!</p>
-                    <Button className="mt-4" onClick={() => setActiveTab("create")}>
-                      Create Your First AI
-                    </Button>
-                  </div>
+                  {myBotsLoading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading your AIs...</p>
+                    </div>
+                  ) : myBots.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Bot className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                      <p className="text-lg font-medium mb-2">No AIs Created Yet</p>
+                      <p className="text-sm">Create your first weird AI to see analytics here!</p>
+                      <Button className="mt-4" onClick={() => setActiveTab("create")}>
+                        Create Your First AI
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {myBots.map((bot) => (
+                          <Card key={bot._id} className="p-4">
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <h3 className="font-bold text-lg flex items-center">
+                                  {bot.name}
+                                  <Badge className="ml-2 bg-orange-100 text-orange-700">
+                                    {bot.weirdness || 0}% Weird
+                                  </Badge>
+                                </h3>
+                                <p className="text-sm text-gray-600 italic">"{bot.prompt}"</p>
+                              </div>
+                            </div>
+                            
+                            <div className="text-sm text-gray-700 mb-3">
+                              <strong>Category:</strong> {bot.category || "Creative AI"}
+                            </div>
+                            
+                            <div className="flex items-center justify-between text-sm">
+                              <div className="flex items-center space-x-4 text-gray-600">
+                                <span className="flex items-center">
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  {(bot.views || 0).toLocaleString()} views
+                                </span>
+                                <span className="flex items-center">
+                                  <Heart className="h-4 w-4 mr-1" />
+                                  {(bot.likes || 0).toLocaleString()} likes
+                                </span>
+                              </div>
+                              <Badge variant="outline">{bot.category || "Creative"}</Badge>
+                            </div>
+                            
+                            <div className="mt-3 flex gap-2">
+                              <Button size="sm" variant="outline" onClick={() => {
+                                setActiveTab("test")
+                                setPrompt(bot.prompt)
+                                setBotName(bot.name)
+                              }}>
+                                <MessageSquare className="h-3 w-3 mr-1" />
+                                Test
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => router.push("/gallery")}>
+                                <Eye className="h-3 w-3 mr-1" />
+                                View in Gallery
+                              </Button>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                      
+                      <div className="text-center pt-4 border-t space-y-3">
+                        <p className="text-sm text-gray-600 mb-2">
+                          Showing {myBots.length} AI{myBots.length !== 1 ? 's' : ''} you've created
+                        </p>
+                        <div className="flex gap-2 justify-center">
+                          <Button variant="outline" onClick={() => router.push("/gallery")}>
+                            View All in Gallery
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => {
+                            if (confirm('Clear your local AI data? This cannot be undone.')) {
+                              localStorage.removeItem('myCreatedBots')
+                              setMyBots([])
+                            }
+                          }}>
+                            Clear Data
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          💡 Your AIs are tracked in this browser only
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -796,13 +910,33 @@ export default function CreateBotPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 mt-4">
-            <Button onClick={handleSuccessClose} className="bg-gradient-to-r from-purple-600 to-orange-500 text-white">
-              <Trophy className="mr-2 h-4 w-4" />
-              Enter Tournaments
+            <Button 
+              onClick={() => {
+                setShowSuccessDialog(false)
+                setActiveTab("test")
+              }}
+              className="bg-gradient-to-r from-purple-600 to-orange-500 text-white"
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Test Chat with Your Bot
             </Button>
-            <Button variant="outline" onClick={() => router.push("/gallery")}>
-              View in Community Gallery
-            </Button>
+            <div className="grid grid-cols-3 gap-3">
+              <Button variant="outline" onClick={() => {
+                setShowSuccessDialog(false)
+                setActiveTab("analytics")
+              }}>
+                <TrendingUp className="mr-2 h-4 w-4" />
+                My AIs
+              </Button>
+              <Button variant="outline" onClick={handleSuccessClose}>
+                <Trophy className="mr-2 h-4 w-4" />
+                Tournaments
+              </Button>
+              <Button variant="outline" onClick={() => router.push("/gallery")}>
+                <Eye className="mr-2 h-4 w-4" />
+                Gallery
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

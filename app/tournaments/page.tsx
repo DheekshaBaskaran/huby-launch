@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Trophy, Clock, Users, Star, Zap, ArrowLeft, Crown, Medal, Award, Bot, CheckCircle } from "lucide-react"
+import { Trophy, Clock, Users, Star, Zap, ArrowLeft, Crown, Medal, Award, Bot, CheckCircle, MessageSquare, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
+import ChatBot from "@/components/ChatBot"
 
 interface Tournament {
   _id: string;
@@ -44,6 +45,8 @@ export default function TournamentsPage() {
   const [completedTournaments, setCompletedTournaments] = useState<Tournament[]>([])
   const [userBots, setUserBots] = useState<UserBot[]>([])
   const [loading, setLoading] = useState(true)
+  const [showChatPreview, setShowChatPreview] = useState(false)
+  const [previewBot, setPreviewBot] = useState<UserBot | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -78,6 +81,11 @@ export default function TournamentsPage() {
   const handleJoinTournament = (tournamentId: string) => {
     setSelectedTournament(tournamentId)
     setShowJoinDialog(true)
+  }
+
+  const handleChatPreview = (bot: UserBot) => {
+    setPreviewBot(bot)
+    setShowChatPreview(true)
   }
 
   const handleConfirmJoin = async () => {
@@ -242,9 +250,10 @@ export default function TournamentsPage() {
 
           {/* Tournament Tabs */}
           <Tabs defaultValue="active" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="active">Active Tournaments</TabsTrigger>
               <TabsTrigger value="completed">Completed</TabsTrigger>
+              <TabsTrigger value="your-bots">Your Bots</TabsTrigger>
               <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
             </TabsList>
 
@@ -394,6 +403,70 @@ export default function TournamentsPage() {
               )}
             </TabsContent>
 
+            <TabsContent value="your-bots" className="space-y-6">
+              {userBots.length === 0 ? (
+                <div className="text-center py-12">
+                  <Bot className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Bots Yet</h3>
+                  <p className="text-gray-600 mb-6">
+                    Create your first AI bot to start competing in tournaments!
+                  </p>
+                  <Button onClick={() => router.push("/create")}>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Create Your First Bot
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-semibold">Your AI Bots</h3>
+                    <Button variant="outline" onClick={() => router.push("/create")}>
+                      <Bot className="h-4 w-4 mr-2" />
+                      Create New Bot
+                    </Button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {userBots.map((bot) => (
+                      <Card key={bot._id} className="hover:shadow-lg transition-shadow">
+                        <CardHeader>
+                          <div className="flex items-center justify-between mb-2">
+                            <Badge variant="outline">{bot.category}</Badge>
+                            <Bot className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <CardTitle className="text-lg">{bot.name}</CardTitle>
+                          <CardDescription className="text-sm line-clamp-2">
+                            {bot.prompt}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => handleChatPreview(bot)}
+                            >
+                              <MessageSquare className="h-4 w-4 mr-2" />
+                              Chat Preview
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => router.push("/gallery")}
+                              className="flex-1"
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View in Gallery
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
             <TabsContent value="leaderboard" className="space-y-6">
               <Card>
                 <CardHeader>
@@ -484,6 +557,32 @@ export default function TournamentsPage() {
               Continue
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Chat Preview Dialog */}
+      <Dialog open={showChatPreview} onOpenChange={setShowChatPreview}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <MessageSquare className="h-5 w-5 mr-2 text-purple-600" />
+              Chat Preview: {previewBot?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Test your bot before entering tournaments. See how it responds to different prompts.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {previewBot && (
+            <div className="py-4">
+              <ChatBot
+                botName={previewBot.name}
+                botPrompt={previewBot.prompt}
+                initialMessage={`Hi! I'm ${previewBot.name}. ${previewBot.prompt} Let's chat and see how I perform!`}
+                className="border-0 shadow-none"
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

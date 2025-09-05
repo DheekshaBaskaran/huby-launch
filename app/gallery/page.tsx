@@ -45,14 +45,18 @@ export default function GalleryPage() {
     const fetchBots = async () => {
       try {
         const response = await fetch('/api/bots');
-        const botsData = await response.json();
-        setBots(botsData);
+        const data = await response.json();
+        
+        // The API returns { bots: [...], pagination: {...} }
+        const botsArray = data.bots || [];
+        setBots(botsArray);
         
         // Extract unique categories
-        const uniqueCategories = [...new Set(botsData.map((bot: Bot) => bot.category))] as string[];
+        const uniqueCategories = [...new Set(botsArray.map((bot: Bot) => bot.category))] as string[];
         setCategories(uniqueCategories);
       } catch (error) {
         console.error('Error fetching bots:', error);
+        setBots([]); // Set empty array on error to prevent crashes
       } finally {
         setLoading(false);
       }
@@ -136,26 +140,47 @@ export default function GalleryPage() {
   const handleSendMessage = async () => {
     if (!chatMessage.trim() || !selectedBot) return
 
-    const newHistory = [...chatHistory, { role: "user", message: chatMessage }]
+    const userMessage = chatMessage.trim()
+    const newHistory = [...chatHistory, { role: "user", message: userMessage }]
     setChatHistory(newHistory)
     setChatMessage("")
     setIsGenerating(true)
 
-    // Simulate bot response based on the bot's prompt
-    setTimeout(() => {
-      let botResponse = "";
-      
-      if (selectedBot.responses && selectedBot.responses.length > 0) {
-        // Use one of the bot's predefined responses
-        botResponse = selectedBot.responses[Math.floor(Math.random() * selectedBot.responses.length)];
-      } else {
-        // Generate a generic response based on the bot's prompt
-        botResponse = `*thinking in character* Based on my nature as "${selectedBot.prompt}", here's my response: ${chatMessage} is quite interesting! Let me share my unique perspective on this... *responds in character based on my special abilities* 🤖✨`;
+    try {
+      // Call the internal chat API with the bot's context and conversation history
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          botPrompt: selectedBot.prompt,
+          botName: selectedBot.name,
+          chatHistory: newHistory.slice(0, -1) // Don't include the current message in history
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to get bot response')
       }
 
-      setChatHistory([...newHistory, { role: "bot", message: botResponse }])
+      const data = await response.json()
+      const botResponse = data.response || "I'm having trouble thinking right now... 🤔"
+
+      setChatHistory([...newHistory, { role: "assistant", message: botResponse }])
+    } catch (error) {
+      console.error('Error getting bot response:', error)
+      
+      // Fallback to a character-appropriate error response
+      const fallbackResponse = selectedBot.responses && selectedBot.responses.length > 0
+        ? selectedBot.responses[Math.floor(Math.random() * selectedBot.responses.length)]
+        : `*glitches briefly* My circuits are having a moment! As someone who ${selectedBot.prompt.toLowerCase()}, I should probably say something witty here... but my brain is buffering! 🤖⚡`
+      
+      setChatHistory([...newHistory, { role: "assistant", message: fallbackResponse }])
+    } finally {
       setIsGenerating(false)
-    }, 2000)
+    }
   }
 
   const handleLikeBot = (botId: string) => {
